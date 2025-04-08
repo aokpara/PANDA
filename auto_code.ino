@@ -1,4 +1,3 @@
-//need the following libraries
 #include <Servo.h>
 #include <Button.h>
 #include <Joystick.h>
@@ -27,15 +26,18 @@ Servo ServoRA3;
 AccelStepper stepperX(1, step_pin, dir_pin);
 
 int balldistance;          //digital Read of IR sensor
-int detection = 0;         //number of times the balls are moved to destinations
+int detection = 1;         //number of times the balls are moved to destinations
 int move_finished = 1;     // Used to check if move is completed
 long initial_homing = -1;  // Used to Home Stepper at startup
+unsigned long SPEED = 4000;
 
-//positions of targets for auto mode
-int steps1[22] = { 85, 57, 8, -35, -72, -100, -79, -46, -16, 16, 42, 66, 50, 32, 12, -11, -35, -56, 331, 402, 433, 485 };  //theta 1 values converted over to steps (radians-->degrees/0.45)
-int theta2[22] = {70, 70, 72, 74, 75, 68, 61, 61, 65, 65, 65, 60, 49, 53, 54, 54, 51, 50, 89, 76, 95, 69};                 //theta 2 in degrees
-int theta3[22] = { 141, 148, 145, 157, 147, 136, 119, 129, 128, 128, 140, 119, 98, 114, 110, 110, 99, 105, 89, 81, 93, 8}; //theta 3 in degrees
-int theta4[22] = {69, 66, 82, 82, 83, 70, 61, 54, 62, 61, 63, 61, 46, 51, 51, 51, 47, 49, 12, 9, 2, 0};                    //theta 4 in degrees
+int steps1[23] = {88, 86, 46, 12, -32, -69, -100, -73, -48, -18, 12, 39, 67, 48, 27, 4, -21, -42, -63, 323, 378, 426, 455};  //theta 1 values converted over to steps (radians-->degrees/0.45)
+int theta2[23] = {45, 73, 76, 78, 77, 75, 69, 62, 67, 69, 67, 66, 59, 54, 56, 57, 56, 57, 52, 98, 87, 104, 80};                                                         //theta 2 in degrees
+int theta3[23] = {0, 130, 137, 143, 137, 132, 123, 106, 119, 121, 116, 122, 98, 88, 96, 99, 97, 91, 82, 79, 66, 90, 62};                                                        //theta 3 in degrees
+int theta4[23] = {69, 90, 83, 93, 88, 84, 86, 51, 64, 74, 72, 89, 37, 59, 54, 40, 60, 58, 43, 0, 13, 0, 0};                                             //theta 4 in degrees
+unsigned long moveStartTime = millis(); //start moving for Servos
+unsigned long moveStartTime2 = millis();
+//int holepos = 0;
 
 void setup() {
   ServoRA2.attach(5);
@@ -50,15 +52,17 @@ void setup() {
   ServoRA2.write(45);
   ServoRA3.write(0);
   Stabilizer.write(69);
+  detection = 0; 
 
-//hello world
+
 /* Configure type of Steps on EasyDriver:
     MS1 MS2 settings
     LOW LOW = Full Step 
 */
   digitalWrite(MS1, LOW);  // Configures to Full Steps
   digitalWrite(MS2, LOW);  // Configures to Full Steps
-
+if (analogRead(A4) > 1000)
+{
 //Homing setup
     pinMode(home_switch, INPUT_PULLUP);
     delay(5);  // Wait for EasyDriver wake up
@@ -68,8 +72,9 @@ void setup() {
 
 // Start Homing procedure of Stepper Motor at startup
   Serial.print("Stepper is Homing . . . . . . . . . . . ");
+  delay(1000);
   while (digitalRead(home_switch)) {  // Make the Stepper move CCW until the switch is   activated
-      stepperX.moveTo(initial_homing);  // Set the position to move to
+    stepperX.moveTo(initial_homing);  // Set the position to move to
       initial_homing--;                 // Decrease by 1 for next move if needed
       stepperX.run();                   // Start moving the stepper
       delay(5);
@@ -89,22 +94,79 @@ void setup() {
     stepperX.setCurrentPosition(0);
     Serial.println("Homing Completed");
     Serial.println("");
-    stepperX.setMaxSpeed(400.0);      // Set Max Speed of Stepper (Faster for regular movements)
-    stepperX.setAcceleration(400.0);  // Set Acceleration of Stepper
+    stepperX.setMaxSpeed(350.0);      // Set Max Speed of Stepper (Faster for regular movements)
+    stepperX.setAcceleration(100.0);  // Set Acceleration of Stepper
     stepperX.moveTo(109.00);   //109 to home RA1    
     stepperX.runToPosition();
     stepperX.setCurrentPosition(0);   // Set the current position as zero for now
 
+} else{}
 }
 
-void S1positions(int holepos) {
+// moves the stepper at desired speed
 
-  ServoRA2.write(theta2[holepos]);
-  ServoRA3.write(theta3[holepos]);
-  Stabilizer.write(theta4[holepos]);
-  delay(500);
-  stepperX.moveTo(steps1[holepos]);
+void S1positions(int holepos, unsigned long moveStartTime1) {
+  int RA2 = ServoRA2.read();
+  int RA3 = ServoRA3.read();
+  int RA4 = Stabilizer.read();
+  stepperX.moveTo(steps1[holepos + 1]);
   stepperX.runToPosition();
+  moveStartTime1 = millis();
+  if (holepos == 0) {
+    SPEED = 2000;}
+  else{SPEED = 700;}
+while (true) {
+unsigned long progress = millis() - moveStartTime1;
+  if (progress <= SPEED) {
+    
+    long angle1 = map(progress, 0, SPEED, RA2, theta2[holepos + 1]);
+    long angle2 = map(progress, 0, SPEED, RA3, theta3[holepos + 1]);
+    long angle3 = map(progress, 0, SPEED, RA4, theta4[holepos + 1]);
+   ServoRA2.write(angle1);
+   ServoRA3.write(angle2);
+   Stabilizer.write(angle3);
+  }
+  else{
+   ServoRA2.write(theta2[holepos + 1]);
+   ServoRA3.write(theta3[holepos + 1]);
+   Stabilizer.write(theta4[holepos + 1]);
+    return(0);
+  }
+
+
+}
+  
+}
+
+ void S2positions(int holepos, unsigned long moveStartTime2) {
+  if (holepos == 19) {
+    SPEED = 2000;
+  }
+  else{SPEED = 700;}
+  int RA2 = ServoRA2.read();
+  int RA3 = ServoRA3.read();
+  int RA4 = Stabilizer.read();
+while (true) {
+unsigned long progress = millis() - moveStartTime2;
+  if (progress <= SPEED) {
+    
+    long angle1 = map(progress, 0, SPEED, RA2, theta2[holepos]);
+    long angle2 = map(progress, 0, SPEED, RA3, theta3[holepos]);
+    long angle3 = map(progress, 0, SPEED, RA4, theta4[holepos]);
+   ServoRA2.write(angle1);
+   ServoRA3.write(angle2);
+   Stabilizer.write(angle3);
+    
+      
+  }
+  else{
+    stepperX.moveTo(steps1[holepos]);
+  stepperX.runToPosition();
+    return(0);
+  }
+
+
+}
   
 }
 
@@ -119,71 +181,75 @@ void Gripper(char mech) {
     Gripper1.write(180);
   }
 }
-void destination(int there)  //function to choose a random hole for 5th hole, and all destinations for 4 holes
-{
-  if (there == 19)  //destination hole 19
-  {ServoRA2.write(theta2[18]);  //theta 2
-    ServoRA3.write(theta3[18]);  //theta 3
-    Stabilizer.write(theta4[18]);
-    delay(1000);
-    stepperX.moveTo(steps1[18]);
-    stepperX.runToPosition();
-    delay(1000);
-    
-  }
-  if (there == 20)  //destination hole 20
-  {ServoRA2.write(theta2[19]);  //theta 2
-    ServoRA3.write(theta3[19]);  //theta 3
-    Stabilizer.write(theta4[19]);
-    delay(1000);
-    stepperX.moveTo(steps1[19]);
-      stepperX.runToPosition();
-        delay(1000);
-    
-  }
-  if (there == 21)  //destination hole 21
-  {ServoRA2.write(theta2[20]);  //theta 2
-    ServoRA3.write(theta3[20]);  //theta 3
-    Stabilizer.write(theta4[20]);
-    delay(100);
-    stepperX.moveTo(steps1[20]);
-    stepperX.runToPosition();
-        delay(1000);
-    
-  }
-  if (there == 22)  //destination hole 22
-  {ServoRA2.write(theta2[21]);  //theta 2
-    ServoRA3.write(theta3[21]);  //theta 3
-    Stabilizer.write(theta4[21]);
-    delay(1000);
-    stepperX.moveTo(steps1[21]);
-    stepperX.runToPosition();
-        delay(1000);
-  }
-  if (there == 23)  // random destination hole
-  {    int rand = random(19, 22);
-ServoRA2.write(theta2[rand]);  //theta 2
-    ServoRA3.write(theta3[rand]);  //theta 3
-    Stabilizer.write(theta4[rand]);
-    delay(1000);
-    stepperX.moveTo(steps1[rand]);
-    stepperX.runToPosition();
-        delay(1000);
-  }
-}
 
 void loop() {
+  unsigned long process = millis();
   int settings = analogRead(A4);
-  if (settings > 1000) {
-
-      for (int i = 0; i < 1; ++i)  //for every hole on S1, sensor will read
+  if (settings > 1000) { 
+    while(detection < 4) {
+      for (int i = 0; i < 18; ++i)  //for every hole on S1, sensor will read
       {
-        S1positions(0);
-      }
- 
+        moveStartTime = millis();
+        S1positions(i, moveStartTime);
+        delay(1000);
+        if (digitalRead(2) == 0)  //if ball is there
+        {  
+          detection += 1;
+          
+          Gripper('p');
+          delay(1000);
+          Gripper('c');
+          moveStartTime2 = millis();
+           if (detection == 1) {
+
+            S2positions(19, moveStartTime2);
+            Gripper('d');
+            delay(500);
+            Gripper('c');
+            moveStartTime = millis();
+            S1positions(i, moveStartTime);
+          }
+          else if (detection == 2) {
+            S2positions(20, moveStartTime2);
+            Gripper('d');
+            delay(500);
+            Gripper('c');
+            moveStartTime = millis();
+            S1positions(i, moveStartTime);
+          } 
+          else if (detection == 3) {
+            S2positions(21, moveStartTime2);
+            Gripper('d');
+            delay(500);
+            Gripper('c');
+            moveStartTime = millis();
+            S1positions(i, moveStartTime);
+          } 
+          else if (detection == 4) {
+            S2positions(22, moveStartTime2);
+            Gripper('d');
+            delay(500);
+            Gripper('c');
+            moveStartTime = millis();
+            S1positions(i,moveStartTime);
+          }
+          else {
+            S2positions(random(19,22), moveStartTime2);
+            Gripper('d');
+            delay(500);
+            Gripper('c');
+            moveStartTime = millis();
+            S1positions(i, moveStartTime);
+          }
+        }
+     else {}
+        }
+    }
 }
+  
   else if (settings < 20) {
     int positioning = analogRead(A5);
-    mloop(positioning);
+    mloop(positioning);    
   }
+
 }
